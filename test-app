@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+  labels:
+    app: my-app
+spec:
+  selector:
+    matchLabels:
+      app: my-app
+  replicas: 2 # minimum two replicas for fault tolerance
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+# we can add below block if we need only one replica in each node 
+#      affinity:
+#        podAntiAffinity:
+#          requiredDuringSchedulingIgnoredDuringExecution:
+#          - labelSelector:
+#              matchExpressions: [{ key: app, operator: In, values: [my-app] }]
+#            topologyKey: kubernetes.io/hostname            
+      containers:
+      - name: my-app
+        image: "image with app"
+        ports:
+        - containerPort: 80
+        resources:
+          limits:
+            cpu: 400m # additional resourses for app startup
+            memory: 128Mi # memory limits, if app will try to use more then needs
+          requests:
+            cpu: 100m # basic cpu usage 
+            memory: 128Mi # basic ram usage
+
+# service section
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-app
+  labels:
+    app: my-app
+spec:
+  ports:
+  - port: 80
+  selector:
+    app: my-app
+
+# Autoscaler, when the load increases, additional pods are automatically created. In case of load decrease, pods are removed
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: my-app
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: my-app
+  minReplicas: 2 # min replicas
+  maxReplicas: 4 # max replicas (because according to the results of the load test, 4 pod's are enough )
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 80 # when load for one pod will be more then 80%, will be created one more pod with app
